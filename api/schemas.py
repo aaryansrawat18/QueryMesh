@@ -10,6 +10,7 @@ class QueryRequest(BaseModel):
 class QueryResponse(BaseModel):
     answer: str
     route: Literal["sql", "etl"]
+    needs_approval: bool = False
 
 
 class ErrorResponse(BaseModel):
@@ -24,3 +25,19 @@ class HealthResponse(BaseModel):
 class ReadyResponse(BaseModel):
     status: Literal["ready", "not_ready"]
     database: Literal["up", "down"]
+
+
+class JobCreate(BaseModel):
+    question: str = Field(..., min_length=1, max_length=4000)
+
+
+class JobCreated(BaseModel):
+    job_id: str
+    status: Literal["queued"]
+
+
+class JobView(BaseModel):
+    job_id: str
+    status: Literal["queued", "running", "succeeded", "failed"]
+    result: str = ""
+    error: str = ""

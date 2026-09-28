@@ -2,8 +2,6 @@
 
 **Goal:** A failed answer can be traced, and a regression fails CI.
 
-There are no tests in the repo today.
-
 ## Build
 
 1. OpenTelemetry spans: API → router → SQL or ETL → database or tool. Propagate `request_id`.
@@ -19,7 +17,7 @@ There are no tests in the repo today.
 
 ## Done when
 
-- [ ] One query produces a single trace from HTTP to SQL
-- [ ] `pytest` covers the SQL gate and auth rejection
-- [ ] CI (see [07-deployment.md](./07-deployment.md)) runs those tests
-- [ ] Eval script prints a score without calling production
+- [x] One query produces a single trace from HTTP to SQL
+- [x] `pytest` covers the SQL gate and auth rejection
+- [x] CI (see [07-deployment.md](./07-deployment.md)) runs those tests
+- [x] Eval script prints a score without calling production

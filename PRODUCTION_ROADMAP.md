@@ -105,10 +105,10 @@ Suggested order: **Phase 0 → 6**. Do not skip Phase 0/1 for “features first�
 
 **Exit criteria**
 
-- [ ] Generated Python never runs in API process
-- [ ] Long ETL returns job id immediately
-- [ ] Rate limit enforced per user/tenant
-- [ ] Agent reads from analytics DB only
+- [x] Generated Python never runs in API process
+- [x] Long ETL returns job id immediately
+- [x] Rate limit enforced per user/tenant
+- [x] Agent reads from analytics DB only
 
 ---
 
@@ -128,10 +128,10 @@ Suggested order: **Phase 0 → 6**. Do not skip Phase 0/1 for “features first�
 
 **Exit criteria**
 
-- [ ] Only top-K schema fragments sent to LLM
-- [ ] Injection test cases fail closed
-- [ ] Cost per request visible in logs/metrics
-- [ ] High-risk path requires approval
+- [x] Only top-K schema fragments sent to LLM
+- [x] Injection test cases fail closed
+- [x] Cost per request visible in logs/metrics
+- [x] High-risk path requires approval
 
 ---
 
@@ -152,10 +152,10 @@ Suggested order: **Phase 0 → 6**. Do not skip Phase 0/1 for “features first�
 
 **Exit criteria**
 
-- [ ] One request produces a full trace
-- [ ] Dashboards for latency/cost/errors
-- [ ] CI runs unit + security tests
-- [ ] Eval suite runs offline and reports scores
+- [x] One request produces a full trace
+- [x] Dashboards for latency/cost/errors (`GET /metrics`)
+- [x] CI runs unit + security tests
+- [x] Eval suite runs offline and reports scores
 
 ---
 

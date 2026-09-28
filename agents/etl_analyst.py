@@ -50,21 +50,24 @@ def transform_load_tool(input_file_path:str,output_folder:str,output_format:str,
 
     """
     etl_tools = ETLTools()
+    try:
+        workdir, local_name, top_3_rows = etl_tools.prepare_transform(input_file_path, output_folder)
+    except (RuntimeError, ValueError, OSError) as exc:
+        return f"Failed to transform data: {exc}"
 
-    top_3_rows = etl_tools.transform_load_context(input_file_path)
-
-    llm = pick_llm("claude")
+    llm = pick_llm("high")
 
     prompt = f"""
             You are a Python Data Analyst who uses Pandas to analyze data. 
-            You need to provide only the Pandas Code that will help to perform the right ETL operations on the data stored in the file : {input_file_path}
+            You need to provide only the Pandas Code that will help to perform the right ETL operations on the data stored in the file : {local_name}
             as per the user's question. Do not provide any explanation or comments, only
             the code should be provided. The code should be in a format that can be executed 
             in a Python environment with Pandas installed. 
             Don't write anything else than Pandas Code. \n
             
-            Create the Pandas Dataframe from the data stored in the file : {input_file_path} and then 
-            write the code to transform and save the data at {output_folder}.
+            The current working directory is the job folder. Read `{local_name}` from the current
+            directory and write the transformed file in the current directory as output.{output_format}.
+            Do not read or write any other path.
             Here's the user's question: {user_question}\n
             Here's the context of the data you will be analyzing: {top_3_rows}\n
 
@@ -75,16 +78,15 @@ def transform_load_tool(input_file_path:str,output_folder:str,output_format:str,
     # Optional Cleaning
     pandas_code = response.strip().strip('```').strip().lstrip('python').strip()
 
-    # Execute the Pandas code
-    results = etl_tools.execute_code(pandas_code)
+    results = etl_tools.execute_code(pandas_code, workdir)
 
-    return f"The data is transformed and saved at {output_folder} in {output_format} format. \n\n Pandas Code Executed: \n {pandas_code} \n\n Execution Result: \n {results}"
+    return f"The data is transformed and saved at {workdir} in {output_format} format. \n\n Pandas Code Executed: \n {pandas_code} \n\n Execution Result: \n {results}"
 
 
 # Toolkit 
 tools = [extract_load_tool, transform_load_tool]
 
-llm = pick_llm("claude")
+llm = pick_llm("high")
 llm_bind = llm.bind_tools(tools)
 
 

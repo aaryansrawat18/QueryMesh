@@ -127,6 +127,13 @@ port=5432
 user=postgres
 password=your_password
 database=querymesh_db
+ANALYTICS_HOST=localhost
+ANALYTICS_PORT=5432
+ANALYTICS_USER=querymesh_ro
+ANALYTICS_PASSWORD=your_password
+ANALYTICS_DATABASE=querymesh_db
+REDIS_URL=redis://localhost:6379/0
+ETL_URL_ALLOWLIST=https://pokeapi.co/
 ```
 
 Load sample CSVs into Postgres (optional, for SQL demos):
@@ -215,7 +222,7 @@ LLM complexity is selected via `pick_llm("low" | "medium" | "claude")`.
 
 ## Security note
 
-This repo is a **tutorial / demo**. SQL safety today relies on an LLM judge (not a hard allowlist). ETL can execute generated Python. Treat credentials carefully, use a dedicated DB, and see [`PRODUCTION_ROADMAP.md`](./PRODUCTION_ROADMAP.md) for hardening steps.
+This repo is a **tutorial / demo**. SQL safety today relies on an LLM judge (not a hard allowlist). Generated ETL Python runs in a worker child process (path jail, no network, URL allowlist on extract). Agent SQL uses `ANALYTICS_*`, not the primary `host` settings. Set `REDIS_URL` before running `python -m workers.etl_worker`. See [`PRODUCTION_ROADMAP.md`](./PRODUCTION_ROADMAP.md).
 
 ---
 

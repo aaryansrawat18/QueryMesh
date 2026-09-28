@@ -6,6 +6,8 @@ import time
 import jwt
 
 os.environ["JWT_SECRET"] = "test-secret-at-least-32-bytes-long"
+os.environ["RATE_LIMIT_USER"] = "100000"
+os.environ["RATE_LIMIT_TENANT"] = "100000"
 
 import api.app as app_module
 import api.routes as routes
@@ -247,6 +249,7 @@ def test_openapi_lists_v1_query():
     assert response.status_code == 200
     spec = response.json()
     assert "/api/v1/agent/query" in spec["paths"]
+    assert "/api/v1/jobs" in spec["paths"]
     assert "/health" in spec["paths"]
     assert "/ready" in spec["paths"]
 

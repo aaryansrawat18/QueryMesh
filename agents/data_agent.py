@@ -3,22 +3,25 @@ import sys
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from agents import sql_analyst
 from utils.llm_pick import pick_llm
-from utils.etl_tools import ETLTools
 from Models.schema import RouterSchema, DataAgentSchema
-from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.graph import StateGraph, START, END
-from langchain.tools import tool
-from langchain_anthropic import ChatAnthropic
-from agents.etl_analyst import etl_analyst
 from agents.sql_analyst import sql_analyst
 from api.policy import assert_can, route_target
+from utils.runtime import enqueue_etl
+from utils.trace import span
 
 
-llm = pick_llm("claude")
+_router = None
 
-llm_router = llm.with_structured_output(RouterSchema)
+
+def router_llm():
+    """Cheap model. Built on first route so importing this module does not need API keys."""
+    global _router
+    if _router is None:
+        _router = pick_llm("low").with_structured_output(RouterSchema)
+    return _router
 
 
 # ---------------------------- QUERYMESH GRAPH ---------------------------- #
@@ -28,7 +31,8 @@ def router_node(state:DataAgentSchema):
 
     message = state.messages[-1].content
 
-    route_response_dict = llm_router.invoke(message).model_dump()
+    with span("router"):
+        route_response_dict = router_llm().invoke(message).model_dump()
 
     route_response = route_response_dict['answer']
 
@@ -38,20 +42,23 @@ def router_node(state:DataAgentSchema):
 
 def etl_node(state:DataAgentSchema):
     assert_can(state.role, "etl")
-
-    message = state.messages[-1].content
-
-    response = etl_analyst.invoke(
-             {"messages":[HumanMessage(content=f"""
-            {message}
-    """)]}
-        ) 
-    state.messages = state.messages + [response]
-
+    with span("etl"):
+        job_id = enqueue_etl(
+            question=state.messages[-1].content,
+            user_id="agent",
+            tenant_id=state.tenant_id,
+            role=state.role,
+        )
+    state.messages = state.messages + [AIMessage(content=f"Queued ETL job {job_id}")]
     return state
 
 def sql_node(state:DataAgentSchema):
     assert_can(state.role, "sql")
+    with span("sql"):
+        return _sql_node(state)
+
+
+def _sql_node(state:DataAgentSchema):
 
     message = state.messages[-1].content
 
@@ -69,9 +76,14 @@ def sql_node(state:DataAgentSchema):
         "role": state.role,
     }
 
-    response = sql_analyst.invoke(input_schema)
+    response = sql_analyst.invoke(
+        input_schema,
+        config={"recursion_limit": int(os.environ.get("MAX_GRAPH_STEPS", "16"))},
+    )
 
     state.messages = state.messages + [response]
+    if isinstance(response, dict):
+        state.needs_approval = bool(response.get("needs_approval"))
 
     return state
 

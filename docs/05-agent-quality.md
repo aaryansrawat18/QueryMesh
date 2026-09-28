@@ -15,7 +15,7 @@ Depends on [01-security.md](./01-security.md).
 
 ## Done when
 
-- [ ] Prompts contain only the retrieved schema slice
-- [ ] A prompt-injection fixture fails closed
-- [ ] Logs show tokens and cost for a request
-- [ ] Over-budget runs stop with a clear error
+- [x] Prompts contain only the retrieved schema slice
+- [x] A prompt-injection fixture fails closed
+- [x] Logs show tokens and cost for a request
+- [x] Over-budget runs stop with a clear error

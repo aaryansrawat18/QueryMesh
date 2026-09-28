@@ -1,6 +1,5 @@
 import json
 import logging
-import os
 import re
 import time
 import uuid
@@ -9,11 +8,16 @@ import psycopg2
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from api.jobs import router as jobs_router
 from api.routes import router
 from api.schemas import ErrorResponse, HealthResponse, ReadyResponse
+from utils.database import analytics_config
+from utils.metrics import metrics
+from utils.runtime import get_backends
+from utils.trace import annotate, configure_llm_export, set_request_id, setup_tracing, span
 
 logger = logging.getLogger("querymesh.api")
 _REQUEST_ID = re.compile(r"^[A-Za-z0-9._-]{1,128}$")
@@ -29,9 +33,21 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         request_id = _request_id(request.headers.get("x-request-id"))
         request.state.request_id = request_id
+        set_request_id(request_id)
         started = time.perf_counter()
         try:
-            response = await call_next(request)
+            with span("http", method=request.method, route=request.url.path) as current:
+                try:
+                    response = await call_next(request)
+                except Exception:
+                    logger.exception(
+                        json.dumps({"request_id": request_id, "route": request.url.path, "event": "unhandled"})
+                    )
+                    response = JSONResponse(
+                        status_code=500,
+                        content=ErrorResponse(error="internal_error", detail="Agent request failed").model_dump(),
+                    )
+                annotate(current, "http.status_code", response.status_code)
         except Exception:
             logger.exception(json.dumps({"request_id": request_id, "route": request.url.path, "event": "unhandled"}))
             response = JSONResponse(
@@ -39,6 +55,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                 content=ErrorResponse(error="internal_error", detail="Agent request failed").model_dump(),
             )
         latency_ms = round((time.perf_counter() - started) * 1000, 2)
+        metrics.observe_http(response.status_code, latency_ms)
         response.headers["X-Request-Id"] = request_id
         logger.info(
             json.dumps(
@@ -56,14 +73,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
 def postgres_reachable() -> bool:
     load_dotenv()
     try:
-        connection = psycopg2.connect(
-            host=os.environ.get("host", "localhost"),
-            port=os.environ.get("port", "5432"),
-            user=os.environ.get("user", "postgres"),
-            password=os.environ.get("password", ""),
-            dbname=os.environ.get("database", "postgres"),
-            connect_timeout=3,
-        )
+        connection = psycopg2.connect(**analytics_config(), connect_timeout=3)
     except Exception:
         return False
     connection.close()
@@ -72,9 +82,14 @@ def postgres_reachable() -> bool:
 
 def create_app() -> FastAPI:
     logging.basicConfig(level=logging.INFO, format="%(message)s")
+    load_dotenv()
+    setup_tracing()
+    configure_llm_export()
+    get_backends()
     app = FastAPI(title="QueryMesh", version="0.1.0")
     app.add_middleware(RequestContextMiddleware)
     app.include_router(router)
+    app.include_router(jobs_router)
 
     @app.exception_handler(RequestValidationError)
     async def validation_error(_request: Request, exc: RequestValidationError):
@@ -90,6 +105,10 @@ def create_app() -> FastAPI:
     @app.get("/health", response_model=HealthResponse, tags=["ops"])
     def health() -> HealthResponse:
         return HealthResponse(status="ok")
+
+    @app.get("/metrics", tags=["ops"])
+    def metrics_view() -> PlainTextResponse:
+        return PlainTextResponse(metrics.render(), media_type="text/plain; version=0.0.4")
 
     @app.get(
         "/ready",

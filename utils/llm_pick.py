@@ -1,38 +1,61 @@
-from langchain_openai import ChatOpenAI
-from langchain_anthropic import ChatAnthropic
-from dotenv import load_dotenv
-load_dotenv()
+"""Env-driven model choice. Router and easy SQL stay on the cheap model."""
 
-def pick_llm(level: str):
-    """
-    Picks the appropriate LLM based on the level of the question.
+import os
+import re
 
-    Args:
-        level (str): The level of the question, can be "low", "medium", or "high".
+from utils.budget import Metered
 
-    Returns:
-        ChatOpenAI: The LLM instance to be used.
-    """
-    if level.lower() == "low":
-        # llm = ChatAnthropic(model_name="claude-haiku-4-5", temperature=0)
-        llm = ChatOpenAI(model_name="gpt-5.6-luna", temperature=0,model_kwargs={
-        "reasoning_effort": "none"
-        })
-    elif level.lower() == "medium":
-        llm = ChatOpenAI(model_name="gpt-5.6-terra", temperature=0,model_kwargs={
-        "reasoning_effort": "none"
-    })
-    elif level.lower() == "high":
-        llm = ChatOpenAI(model_name="gpt-5.6-sol", temperature=0,model_kwargs={
-        "reasoning_effort": "none"
-    })
-    elif level.lower() == "claude":
-        llm = ChatAnthropic(model_name="claude-sonnet-5")
+_ENV = {
+    "low": "LLM_LOW",
+    "medium": "LLM_MEDIUM",
+    "high": "LLM_HIGH",
+    "claude": "LLM_HIGH",  # old tier name; same model as high
+}
+_DEFAULTS = {
+    "low": "gpt-4o-mini",
+    "medium": "gpt-4o",
+    "high": "claude-sonnet-4-5",
+    "claude": "claude-sonnet-4-5",
+}
+_HARD_SQL = re.compile(
+    r"\b(join|window|rank|percentile|cohort|median|year[- ]over[- ]year)\b",
+    re.I,
+)
+
+
+def model_name(level: str) -> str:
+    key = _ENV.get(level)
+    if key is None:
+        raise ValueError(f"unknown model level: {level}")
+    name = os.environ.get(key, "").strip() or _DEFAULTS[level]
+    return name
+
+
+def sql_level(question: str) -> str:
+    """Stronger SQL model only when the question looks like a hard query."""
+    if _HARD_SQL.search(question or ""):
+        return "medium"
+    return "low"
+
+
+def _build(name: str, *, fallback: bool) -> Metered:
+    timeout = float(os.environ.get("LLM_TIMEOUT_SECONDS", "30"))
+    if name.startswith("claude"):
+        from langchain_anthropic import ChatAnthropic
+
+        inner = ChatAnthropic(model=name, temperature=0, timeout=timeout)
     else:
-        raise ValueError(f"Unsupported level: {level}")
+        from langchain_openai import ChatOpenAI
 
-    return llm
+        inner = ChatOpenAI(model=name, temperature=0, timeout=timeout)
+    return Metered(inner, model=name, fallback=fallback)
 
-if __name__ == "__main__":
-    llm_obj = pick_llm("low")  
-    print(llm_obj.invoke("What is the capital of France?"))
+
+def pick_llm(level: str) -> Metered:
+    return _build(model_name(level), fallback=False)
+
+
+def fallback_llm() -> Metered:
+    """Used after the primary model keeps failing. Same call budget, no second fallback."""
+    name = os.environ.get("LLM_FALLBACK", "").strip() or "gpt-4o-mini"
+    return _build(name, fallback=True)

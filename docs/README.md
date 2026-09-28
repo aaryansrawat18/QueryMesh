@@ -19,7 +19,7 @@ Existing overview: [`../PRODUCTION_ROADMAP.md`](../PRODUCTION_ROADMAP.md). These
 - `utils/database.py` connects on import with password `"potgres"` and writes `test_schema_details.txt`.
 - `execute_sql` runs any SQL and calls `commit()`.
 - Schema prompts include `SELECT * ... LIMIT 5` sample rows (PII).
-- `utils/etl_tools.py` calls `exec(code)` and `requests.get(url)` with no allowlist.
+- `utils/etl_tools.py` runs generated Python only in the ETL worker's child process. Extract URLs must be on `ETL_URL_ALLOWLIST`.
 - `main.py` is a hardcoded CLI invoke. No API, auth, tests, Docker, or CI.
 
 ## Done when

@@ -1,7 +1,35 @@
+import os
+import time
+
 import psycopg2
+from dotenv import load_dotenv
 from psycopg2 import sql
 
 from api.policy import column_visible, mask_cell
+from utils.metrics import metrics
+from utils.reliability import CircuitOpen, call, db_breaker
+from utils.sql_gate import assert_read_only
+from utils.trace import span
+
+
+def analytics_config() -> dict:
+    """Read-replica settings. The agent never uses the primary host/user/database keys."""
+    load_dotenv()
+    host = os.environ.get("ANALYTICS_HOST", "").strip()
+    port = os.environ.get("ANALYTICS_PORT", "").strip()
+    user = os.environ.get("ANALYTICS_USER", "").strip()
+    database = os.environ.get("ANALYTICS_DATABASE", "").strip()
+    if not all((host, port, user, database)):
+        raise RuntimeError("ANALYTICS_HOST, ANALYTICS_PORT, ANALYTICS_USER, and ANALYTICS_DATABASE are required")
+    timeout_ms = int(os.environ.get("SQL_STATEMENT_TIMEOUT_MS", "5000"))
+    return {
+        "host": host,
+        "port": int(port),
+        "user": user,
+        "password": os.environ.get("ANALYTICS_PASSWORD", ""),
+        "dbname": database,
+        "options": f"-c statement_timeout={timeout_ms}",
+    }
 
 
 class DatabaseUtil:
@@ -76,9 +104,81 @@ class DatabaseUtil:
 
         return schema_info_context
 
-    def execute_sql(self, query, tenant_id: str = "", role: str = ""):
-        if not tenant_id:
-            raise ValueError("tenant_id required")
+    def catalog(self, schema_name, role: str = "") -> list[dict]:
+        """Table and column metadata plus foreign keys. No sample rows."""
+        if self.connection is None:
+            return []
+        cursor = None
+        try:
+            cursor = self.connection.cursor()
+            cursor.execute(
+                "SELECT table_name FROM information_schema.tables WHERE table_schema = %s;",
+                (schema_name,),
+            )
+            tables = [row[0] for row in cursor.fetchall()]
+            refs: dict[str, list[tuple[str, str, str]]] = {}
+            try:
+                cursor.execute(
+                    """
+                    SELECT tc.table_name, kcu.column_name, ccu.table_name, ccu.column_name
+                    FROM information_schema.table_constraints tc
+                    JOIN information_schema.key_column_usage kcu
+                      ON tc.constraint_name = kcu.constraint_name
+                     AND tc.table_schema = kcu.table_schema
+                    JOIN information_schema.constraint_column_usage ccu
+                      ON ccu.constraint_name = tc.constraint_name
+                     AND ccu.table_schema = tc.table_schema
+                    WHERE tc.constraint_type = 'FOREIGN KEY' AND tc.table_schema = %s
+                    """,
+                    (schema_name,),
+                )
+                for table_name, column_name, ref_table, ref_column in cursor.fetchall():
+                    refs.setdefault(table_name, []).append((column_name, ref_table, ref_column))
+            except Exception:
+                self.connection.rollback()
+                cursor = self.connection.cursor()
+            docs = []
+            for table_name in tables:
+                cursor.execute(
+                    "SELECT column_name, data_type FROM information_schema.columns WHERE table_schema = %s AND table_name = %s;",
+                    (schema_name, table_name),
+                )
+                visible = [
+                    (column_name, data_type)
+                    for column_name, data_type in cursor.fetchall()
+                    if column_visible(role, table_name, column_name)
+                ]
+                if not visible:
+                    continue
+                columns = ", ".join(f"{name} {data_type}" for name, data_type in visible)
+                links = refs.get(table_name, [])
+                relation = ""
+                if links:
+                    rendered = "; ".join(
+                        f"{table_name}.{column} references {ref_table}.{ref_column}"
+                        for column, ref_table, ref_column in links
+                    )
+                    relation = f" Relationships: {rendered}."
+                docs.append(
+                    {
+                        "name": table_name,
+                        "text": f"Table {table_name}. Columns: {columns}.{relation}",
+                        "refs": [ref_table for _column, ref_table, _ref_column in links],
+                    }
+                )
+            return docs
+        except Exception as exc:
+            print(f"Error fetching schema catalog: {exc}")
+            return []
+        finally:
+            if cursor:
+                cursor.close()
+            if self.connection:
+                self.connection.close()
+
+    def _query(self, query, tenant_id: str, role: str):
+        if self.connection is None or getattr(self.connection, "closed", 0):
+            self.connection = psycopg2.connect(**self.db_config)
         cursor = None
         connection = self.connection
         try:
@@ -97,14 +197,32 @@ class DatabaseUtil:
             ]
             connection.commit()
             return str(masked)
-        except Exception as e:
-            print(f"Error executing query: {e}")
-            return None
         finally:
             if cursor:
                 cursor.close()
             if connection:
                 connection.close()
+
+    def execute_sql(self, query, tenant_id: str = "", role: str = ""):
+        if not tenant_id:
+            raise ValueError("tenant_id required")
+        query = assert_read_only(query)
+        started = time.perf_counter()
+        try:
+            with span("db.execute"):
+                result = call(
+                    db_breaker,
+                    lambda: self._query(query, tenant_id, role),
+                    attempts=int(os.environ.get("DB_RETRIES", "2")),
+                    retryable=lambda exc: isinstance(exc, (psycopg2.OperationalError, psycopg2.InterfaceError)),
+                )
+        except CircuitOpen:
+            raise
+        except Exception as exc:
+            print(f"Error executing query: {exc}")
+            return "query failed"
+        metrics.observe_sql((time.perf_counter() - started) * 1000)
+        return result
 
 
 if __name__ == "__main__":

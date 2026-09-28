@@ -15,7 +15,7 @@ Depends on [01-security.md](./01-security.md) and [02-api.md](./02-api.md).
 
 ## Done when
 
-- [ ] API process has no `exec` of model code
-- [ ] ETL returns a job id immediately
-- [ ] A non-allowlisted URL is rejected
-- [ ] Excess requests return 429
+- [x] API process has no `exec` of model code
+- [x] ETL returns a job id immediately
+- [x] A non-allowlisted URL is rejected
+- [x] Excess requests return 429
