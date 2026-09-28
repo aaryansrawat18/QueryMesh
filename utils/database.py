@@ -1,4 +1,7 @@
 import psycopg2
+from psycopg2 import sql
+
+from api.policy import column_visible, mask_cell
 
 
 class DatabaseUtil:
@@ -13,35 +16,49 @@ class DatabaseUtil:
             print(f"Error connecting to the database: {e}")
             self.connection = None
 
-    def schema_details(self,schema_name):
+    def schema_details(self, schema_name, role: str = ""):
 
         schema_info_context = ""
-        
         connection = self.connection
-        cursor = connection.cursor()
+        cursor = None
 
         schema_info_context = f"Database Schema: {schema_name}\n"
 
-        try: 
-
-            cursor.execute("SELECT table_name from information_schema.tables where table_schema = %s;", (schema_name,))
+        try:
+            cursor = connection.cursor()
+            cursor.execute(
+                "SELECT table_name from information_schema.tables where table_schema = %s;",
+                (schema_name,),
+            )
             tables_list = cursor.fetchall()
 
             for table in tables_list:
                 table_name = table[0]
                 schema_info_context = f"{schema_info_context}\nTable: {table_name}\n"
 
-                # Adding Columns & Data Types
-                cursor.execute("SELECT column_name, data_type FROM information_schema.columns WHERE table_name = %s;", (table_name,))
+                cursor.execute(
+                    "SELECT column_name, data_type FROM information_schema.columns WHERE table_schema = %s AND table_name = %s;",
+                    (schema_name, table_name),
+                )
                 columns_list = cursor.fetchall()
+                visible = [
+                    (column_name, data_type)
+                    for column_name, data_type in columns_list
+                    if column_visible(role, table_name, column_name)
+                ]
 
-                for column in columns_list:
-                    column_name = column[0]
-                    data_type = column[1]
+                for column_name, data_type in visible:
                     schema_info_context = f"{schema_info_context}  Column: {column_name}, Data Type: {data_type}\n"
 
-                # Adding Sample Data
-                cursor.execute(f"SELECT * FROM {schema_name}.{table_name} LIMIT 5;")
+                if not visible:
+                    continue
+
+                sample_query = sql.SQL("SELECT {} FROM {}.{} LIMIT 5").format(
+                    sql.SQL(", ").join(sql.Identifier(name) for name, _ in visible),
+                    sql.Identifier(schema_name),
+                    sql.Identifier(table_name),
+                )
+                cursor.execute(sample_query)
                 sample_data = cursor.fetchall()
                 schema_info_context = f"{schema_info_context}  Sample Data:\n"
                 for row in sample_data:
@@ -56,17 +73,30 @@ class DatabaseUtil:
                 cursor.close()
             if connection:
                 connection.close()
-        
+
         return schema_info_context
 
-    def execute_sql(self, query):
+    def execute_sql(self, query, tenant_id: str = "", role: str = ""):
+        if not tenant_id:
+            raise ValueError("tenant_id required")
+        cursor = None
+        connection = self.connection
         try:
-            connection = self.connection
             cursor = connection.cursor()
+            cursor.execute("SELECT set_config('app.tenant_id', %s, true)", (tenant_id,))
+            cursor.fetchone()
             cursor.execute(query)
-            result = cursor.fetchall()
+            columns = [desc[0] for desc in cursor.description] if cursor.description else []
+            rows = cursor.fetchall()
+            masked = [
+                tuple(
+                    mask_cell(role or "viewer", columns[index] if index < len(columns) else "", value)
+                    for index, value in enumerate(row)
+                )
+                for row in rows
+            ]
             connection.commit()
-            return str(result)
+            return str(masked)
         except Exception as e:
             print(f"Error executing query: {e}")
             return None
@@ -77,15 +107,17 @@ class DatabaseUtil:
                 connection.close()
 
 
-obj = DatabaseUtil({
-    "host": "localhost",
-    "port": 5432,
-    "user": "postgres",
-    "password": "potgres",
-    "dbname": "postgres"
-})
+if __name__ == "__main__":
+    # ponytail: do not connect on import — GET /ready probes Postgres.
+    obj = DatabaseUtil({
+        "host": "localhost",
+        "port": 5432,
+        "user": "postgres",
+        "password": "potgres",
+        "dbname": "postgres"
+    })
 
-result = obj.schema_details("public")
+    result = obj.schema_details("public")
 
-with open("test_schema_details.txt", "w") as f:
-    f.write(result)
+    with open("test_schema_details.txt", "w") as f:
+        f.write(result)

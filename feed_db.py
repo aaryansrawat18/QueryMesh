@@ -1,5 +1,7 @@
 import os
 import csv
+from pathlib import Path
+
 import psycopg2
 from psycopg2 import sql
 from dotenv import load_dotenv
@@ -212,8 +214,11 @@ ON public.ratings(driver_id);
 """
 
 cursor.execute(create_tables_sql)
+cursor.execute((Path(__file__).resolve().parent / "sql" / "tenant_rls.sql").read_text(encoding="utf-8"))
+cursor.execute("SELECT set_config('app.tenant_id', 'local', false)")
 
 print("Tables created successfully")
+print("Tenant row-level security enabled")
 
 
 # ============================================================

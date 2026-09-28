@@ -13,6 +13,7 @@ from langchain.tools import tool
 from langchain_anthropic import ChatAnthropic
 from agents.etl_analyst import etl_analyst
 from agents.sql_analyst import sql_analyst
+from api.policy import assert_can, route_target
 
 
 llm = pick_llm("claude")
@@ -36,6 +37,7 @@ def router_node(state:DataAgentSchema):
     return state
 
 def etl_node(state:DataAgentSchema):
+    assert_can(state.role, "etl")
 
     message = state.messages[-1].content
 
@@ -49,6 +51,7 @@ def etl_node(state:DataAgentSchema):
     return state
 
 def sql_node(state:DataAgentSchema):
+    assert_can(state.role, "sql")
 
     message = state.messages[-1].content
 
@@ -61,7 +64,9 @@ def sql_node(state:DataAgentSchema):
         "is_safe": "No",
         "comments": "",
         "sql_query_execution_result": "",
-        "final_answer": ""
+        "final_answer": "",
+        "tenant_id": state.tenant_id,
+        "role": state.role,
     }
 
     response = sql_analyst.invoke(input_schema)
@@ -82,12 +87,7 @@ data_agent_graph.add_node("sql_node", sql_node)
 data_agent_graph.add_edge(START, "router_node")
 
 def route_edge(state: DataAgentSchema) -> str:
-    if state.route_response == "sql":
-        return "sql_node"
-    elif state.route_response == "etl":
-        return "etl_node"
-    else:
-        raise ValueError(f"Invalid route response: {state.route_response}")
+    return route_target(state.route_response, state.role)
 
 
 data_agent_graph.add_conditional_edges("router_node", route_edge,
@@ -98,19 +98,18 @@ data_agent_graph.add_conditional_edges("router_node", route_edge,
 
 data_agent = data_agent_graph.compile()
 
-# Optional|
-from IPython.display import display, Image
-img = Image(data_agent.get_graph().draw_mermaid_png())
-with open("data_agent_graph.png", "wb") as f:
-    f.write(img.data)
-
-
 
 if __name__ == "__main__":
+    from IPython.display import Image
+    img = Image(data_agent.get_graph().draw_mermaid_png())
+    with open("data_agent_graph.png", "wb") as f:
+        f.write(img.data)
 
     response = data_agent.invoke(
         {"messages":[HumanMessage(content="I want to extract the data from the API endpoint 'https://pokeapi.co/api/v2/pokemon' and save it to data/extract folder in the csv folder")],
-         "route_response": ""}
+         "route_response": "",
+         "tenant_id": "local",
+         "role": "admin"}
     )
 
     print(response)

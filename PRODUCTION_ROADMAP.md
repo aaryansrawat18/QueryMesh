@@ -7,6 +7,8 @@ Phase-by-phase plan to take this tutorial **QueryMesh** (LangGraph SQL + ETL + P
 
 ---
 
+Implementation checklists (file-by-file tasks and exit checks) live in [`docs/README.md`](./docs/README.md).
+
 ## How to use this doc
 
 | Column | Meaning |
@@ -58,10 +60,10 @@ Suggested order: **Phase 0 → 6**. Do not skip Phase 0/1 for “features first�
 
 **Exit criteria**
 
-- [ ] `uvicorn` serves the agent
-- [ ] OpenAPI docs work
-- [ ] Health endpoints report DB status
-- [ ] Each request has a `request_id`
+- [x] `uvicorn` serves the agent
+- [x] OpenAPI docs work
+- [x] Health endpoints report DB status
+- [x] Each request has a `request_id`
 
 ---
 

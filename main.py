@@ -1,10 +1,26 @@
-from agents.data_agent import data_agent
-from langchain_core.messages import HumanMessage
+"""Local runner. Uses the same query function as POST /api/v1/agent/query."""
+
+import argparse
+import os
+
+from api.auth import CurrentUser
+from api.routes import run_query
+
+
+def main(argv=None) -> int:
+    parser = argparse.ArgumentParser(description="Ask QueryMesh from the terminal")
+    parser.add_argument("question", help="Natural language question")
+    args = parser.parse_args(argv)
+    user = CurrentUser(
+        user_id="cli",
+        role=os.environ.get("QUERYMESH_ROLE", "admin"),
+        tenant_id=os.environ.get("QUERYMESH_TENANT", "local"),
+    )
+    result = run_query(args.question, user)
+    print(f"route: {result['route']}")
+    print(result["answer"])
+    return 0
+
 
 if __name__ == "__main__":
-    response = data_agent.invoke(
-        {"messages":[HumanMessage(content="I want to extract the data from the API endpoint 'https://pokeapi.co/api/v2/pokemon' and save it to data/extract folder in the csv folder")],
-         "route_response": ""}
-    )
-
-    print(response)
+    raise SystemExit(main())

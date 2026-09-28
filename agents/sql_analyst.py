@@ -40,7 +40,7 @@ def prompt_query_context(state: AgentSchema) -> AgentSchema:
 
     obj = DatabaseUtil(conn_details)
 
-    schema_info = obj.schema_details("public")  # Fetch schema details for the 'public' schema
+    schema_info = obj.schema_details("public", role=state.role)
 
     # Constructing the prompt query for the agent to generate the SQL query
     prompt = f"""
@@ -131,7 +131,7 @@ def execute_sql(state: AgentSchema) -> AgentSchema:
 
     obj = DatabaseUtil(conn_details)
 
-    execution_result = obj.execute_sql(sql_query)  # Execute the SQL query on the database
+    execution_result = obj.execute_sql(sql_query, tenant_id=state.tenant_id, role=state.role)
 
     state.sql_query_execution_result = execution_result
 
