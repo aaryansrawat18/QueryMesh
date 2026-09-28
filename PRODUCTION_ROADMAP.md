@@ -83,9 +83,9 @@ Suggested order: **Phase 0 → 6**. Do not skip Phase 0/1 for “features first�
 
 **Exit criteria**
 
-- [ ] Unauthenticated requests rejected
-- [ ] Role cannot access forbidden tables/columns
-- [ ] Cross-tenant query attempts fail (app + RLS)
+- [x] Unauthenticated requests rejected
+- [x] Role cannot access forbidden tables/columns
+- [ ] Cross-tenant query attempts fail (app + RLS) — app check is in; apply `QueryMesh/sql/tenant_rls.sql` when Postgres is up
 
 ---
 

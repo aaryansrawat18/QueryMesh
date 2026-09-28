@@ -293,6 +293,6 @@ RLS itself is a SQL check, not a unit test: connect as the agent role, `set_conf
 
 ## Done when
 
-- [ ] Unauthenticated `POST /api/v1/agent/query` returns 401
-- [ ] Viewer cannot call ETL or read forbidden columns
-- [ ] A query for another `tenant_id` returns no rows (app check and RLS)
+- [x] Unauthenticated `POST /api/v1/agent/query` returns 401
+- [x] Viewer cannot call ETL or read forbidden columns
+- [ ] A query for another `tenant_id` returns no rows (app check and RLS) — app check is in place; run [`sql/tenant_rls.sql`](../sql/tenant_rls.sql) once Postgres is up. `feed_db.py` applies that file on the next seed.
