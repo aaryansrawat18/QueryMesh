@@ -2,8 +2,6 @@
 
 Multi-agent system that turns natural language into **SQL queries** or **ETL jobs**, orchestrated with [LangGraph](https://langchain-ai.github.io/langgraph/).
 
-> Tutorial: [YouTube — QueryMesh walkthrough](https://youtu.be/7yOmi4IX-Rs?si=_NGAHOomEPocRoqt)
-
 ---
 
 ## What it does
