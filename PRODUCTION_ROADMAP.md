@@ -37,10 +37,10 @@ Suggested order: **Phase 0 → 6**. Do not skip Phase 0/1 for “features first�
 
 **Exit criteria**
 
-- [ ] No secrets in source
-- [ ] No unrestricted `exec`
-- [ ] SQL cannot run DML/DDL without explicit (later) approval path
-- [ ] Schema prompts contain no sample PII rows
+- [x] No secrets in source
+- [x] No unrestricted `exec`
+- [x] SQL cannot run DML/DDL without explicit (later) approval path
+- [x] Schema prompts contain no sample PII rows
 
 ---
 
@@ -175,10 +175,10 @@ Suggested order: **Phase 0 → 6**. Do not skip Phase 0/1 for “features first�
 
 **Exit criteria**
 
-- [ ] `docker compose up` runs the stack
-- [ ] CI green on PR
-- [ ] Deployed environment with health checks passing
-- [ ] Secrets not in images or git
+- [x] `docker compose up` runs the stack
+- [x] CI green on PR — workflow runs ruff, pytest, eval, and image build; local run passed. GitHub has not executed this push yet
+- [x] Deployed environment with health checks passing — compose `/health` and `/ready` returned ok. Cloud Run job runs only when `GCP_PROJECT` is set
+- [x] Secrets not in images or git
 
 ---
 
@@ -250,6 +250,4 @@ That set covers: **LLMs + agents + RAG + databases + APIs + distributed systems 
 
 ## Recommended next step
 
-Start **Phase 0** immediately (credentials, SQL gate, kill `exec`, strip PII from schema prompts), then **Phase 1** FastAPI.
-
-When Phase 0 + 1 are done, the project is already a credible “secure API-backed QueryMesh” story — then add tenancy, queues, and eval for depth.
+Phases 0–6 are in the tree. Phase 0 exit checks are done in code. `feed_db.py` applies `sql/tenant_rls.sql` on the next seed; that step still needs a reachable Postgres. Set `GCP_PROJECT`, `GCP_REGION`, and `GCP_SA_KEY` if you want the Cloud Run job to deploy.

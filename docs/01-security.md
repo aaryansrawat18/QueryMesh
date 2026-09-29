@@ -22,7 +22,7 @@
 
 ## Done when
 
-- [ ] Importing `utils.database` does not connect or write a file
-- [ ] `DROP`, `DELETE`, and stacked statements are rejected before the driver
-- [ ] Schema context contains column names and types only
-- [ ] `execute_code` cannot run arbitrary Python
+- [x] Importing `utils.database` does not connect or write a file
+- [x] `DROP`, `DELETE`, and stacked statements are rejected before the driver
+- [x] Schema context contains column names and types only
+- [x] `execute_code` cannot run arbitrary Python

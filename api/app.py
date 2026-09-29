@@ -11,12 +11,14 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, PlainTextResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from api.feedback import router as feedback_router
 from api.jobs import router as jobs_router
 from api.routes import router
 from api.schemas import ErrorResponse, HealthResponse, ReadyResponse
 from utils.database import analytics_config
 from utils.metrics import metrics
 from utils.runtime import get_backends
+from utils.secrets import prepare_runtime
 from utils.trace import annotate, configure_llm_export, set_request_id, setup_tracing, span
 
 logger = logging.getLogger("querymesh.api")
@@ -82,7 +84,7 @@ def postgres_reachable() -> bool:
 
 def create_app() -> FastAPI:
     logging.basicConfig(level=logging.INFO, format="%(message)s")
-    load_dotenv()
+    prepare_runtime()
     setup_tracing()
     configure_llm_export()
     get_backends()
@@ -90,6 +92,7 @@ def create_app() -> FastAPI:
     app.add_middleware(RequestContextMiddleware)
     app.include_router(router)
     app.include_router(jobs_router)
+    app.include_router(feedback_router)
 
     @app.exception_handler(RequestValidationError)
     async def validation_error(_request: Request, exc: RequestValidationError):

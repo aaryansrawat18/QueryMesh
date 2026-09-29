@@ -14,13 +14,9 @@ Existing overview: [`../PRODUCTION_ROADMAP.md`](../PRODUCTION_ROADMAP.md). These
 | 5 | [06-observability-testing.md](./06-observability-testing.md) | Traces, tests, eval harness |
 | 6 | [07-deployment.md](./07-deployment.md) | Docker, CI, secrets, backups |
 
-## Current blockers (from the code)
+## Status
 
-- `utils/database.py` connects on import with password `"potgres"` and writes `test_schema_details.txt`.
-- `execute_sql` runs any SQL and calls `commit()`.
-- Schema prompts include `SELECT * ... LIMIT 5` sample rows (PII).
-- `utils/etl_tools.py` runs generated Python only in the ETL worker's child process. Extract URLs must be on `ETL_URL_ALLOWLIST`.
-- `main.py` is a hardcoded CLI invoke. No API, auth, tests, Docker, or CI.
+Packets 0–6 are in this tree. Exit checks are the boxes in [`PRODUCTION_ROADMAP.md`](../PRODUCTION_ROADMAP.md). Apply `sql/tenant_rls.sql` on Postgres for database-side tenant isolation. `docker compose up` is the local prod-like stack.
 
 ## Done when
 

@@ -10,3 +10,6 @@ wheels/
 .venv
 .env
 data/audit.jsonl
+data/feedback.jsonl
+backups/
+test_schema_details.txt

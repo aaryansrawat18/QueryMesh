@@ -3,7 +3,6 @@ import time
 
 import psycopg2
 from dotenv import load_dotenv
-from psycopg2 import sql
 
 from api.policy import column_visible, mask_cell
 from utils.metrics import metrics
@@ -22,7 +21,7 @@ def analytics_config() -> dict:
     if not all((host, port, user, database)):
         raise RuntimeError("ANALYTICS_HOST, ANALYTICS_PORT, ANALYTICS_USER, and ANALYTICS_DATABASE are required")
     timeout_ms = int(os.environ.get("SQL_STATEMENT_TIMEOUT_MS", "5000"))
-    return {
+    config = {
         "host": host,
         "port": int(port),
         "user": user,
@@ -30,6 +29,10 @@ def analytics_config() -> dict:
         "dbname": database,
         "options": f"-c statement_timeout={timeout_ms}",
     }
+    sslmode = os.environ.get("ANALYTICS_SSLMODE", "").strip()
+    if sslmode:
+        config["sslmode"] = sslmode
+    return config
 
 
 class DatabaseUtil:
@@ -77,20 +80,6 @@ class DatabaseUtil:
 
                 for column_name, data_type in visible:
                     schema_info_context = f"{schema_info_context}  Column: {column_name}, Data Type: {data_type}\n"
-
-                if not visible:
-                    continue
-
-                sample_query = sql.SQL("SELECT {} FROM {}.{} LIMIT 5").format(
-                    sql.SQL(", ").join(sql.Identifier(name) for name, _ in visible),
-                    sql.Identifier(schema_name),
-                    sql.Identifier(table_name),
-                )
-                cursor.execute(sample_query)
-                sample_data = cursor.fetchall()
-                schema_info_context = f"{schema_info_context}  Sample Data:\n"
-                for row in sample_data:
-                    schema_info_context = f"{schema_info_context}    {row}\n"
 
         except Exception as e:
             print(f"Error fetching schema details: {e}")
@@ -195,7 +184,6 @@ class DatabaseUtil:
                 )
                 for row in rows
             ]
-            connection.commit()
             return str(masked)
         finally:
             if cursor:
@@ -223,19 +211,3 @@ class DatabaseUtil:
             return "query failed"
         metrics.observe_sql((time.perf_counter() - started) * 1000)
         return result
-
-
-if __name__ == "__main__":
-    # ponytail: do not connect on import — GET /ready probes Postgres.
-    obj = DatabaseUtil({
-        "host": "localhost",
-        "port": 5432,
-        "user": "postgres",
-        "password": "potgres",
-        "dbname": "postgres"
-    })
-
-    result = obj.schema_details("public")
-
-    with open("test_schema_details.txt", "w") as f:
-        f.write(result)

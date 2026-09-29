@@ -55,4 +55,10 @@ def build_client():
         return MemoryRedis()
     import redis
 
-    return redis.Redis.from_url(url, decode_responses=True, socket_connect_timeout=2)
+    # BRPOP in the worker waits 5s. The read timeout has to be longer or that wait kills the process.
+    return redis.Redis.from_url(
+        url,
+        decode_responses=True,
+        socket_connect_timeout=2,
+        socket_timeout=30,
+    )

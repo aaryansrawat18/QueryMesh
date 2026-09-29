@@ -208,7 +208,6 @@ def test_schema_details_hides_viewer_columns():
             self._rows = [
                 [("users",)],
                 [("email", "text"), ("phone", "text"), ("city", "text")],
-                [("Halifax",)],
             ]
 
         def execute(self, query, params=None):
@@ -238,10 +237,9 @@ def test_schema_details_hides_viewer_columns():
     assert "phone" not in text
     assert "email" not in text
     assert "city" in text
-    sample_sql = repr(db.connection.cursor_obj.queries[-1])
-    assert "phone" not in sample_sql
-    assert "email" not in sample_sql
-    assert "Identifier('city')" in sample_sql
+    assert "Halifax" not in text
+    assert len(db.connection.cursor_obj.queries) == 2
+    assert all("information_schema" in query for query in db.connection.cursor_obj.queries)
 
 
 def test_openapi_lists_v1_query():

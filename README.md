@@ -154,7 +154,15 @@ Or serve the HTTP API:
 uvicorn api.app:app --reload
 ```
 
-`POST /api/v1/agent/query` with `{"question": "..."}`. Interactive docs are at `/docs`. Liveness is `GET /health`; Postgres readiness is `GET /ready`.
+`POST /api/v1/agent/query` with `{"question": "..."}`. Interactive docs are at `/docs`. Liveness is `GET /health`; Postgres readiness is `GET /ready`. Thumbs on an answer: `POST /api/v1/feedback` with `request_id`, `rating` (`up` or `down`), and an optional `comment`.
+
+Prod-like stack (API, ETL worker, Postgres, Redis):
+
+```bash
+docker compose up --build
+```
+
+The API listens on port 8000. See [`docs/07-deployment.md`](./docs/07-deployment.md) for CI, Secret Manager, and the restore drill.
 
 ### Programmatic usage
 
@@ -222,7 +230,7 @@ LLM complexity is selected via `pick_llm("low" | "medium" | "claude")`.
 
 ## Security note
 
-This repo is a **tutorial / demo**. SQL safety today relies on an LLM judge (not a hard allowlist). Generated ETL Python runs in a worker child process (path jail, no network, URL allowlist on extract). Agent SQL uses `ANALYTICS_*`, not the primary `host` settings. Set `REDIS_URL` before running `python -m workers.etl_worker`. See [`PRODUCTION_ROADMAP.md`](./PRODUCTION_ROADMAP.md).
+This repo is a **tutorial / demo** with production guards. SQL must pass a read-only gate before execute; the LLM judge is a second signal. Generated ETL Python runs in the worker's child process (path jail, no network, URL allowlist on extract). Agent SQL uses `ANALYTICS_*` and the `querymesh_ro` role, not the primary superuser. Set `REDIS_URL` before running `python -m workers.etl_worker`. See [`PRODUCTION_ROADMAP.md`](./PRODUCTION_ROADMAP.md).
 
 ---
 

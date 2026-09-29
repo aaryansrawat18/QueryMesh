@@ -1,0 +1,88 @@
+# Local prod-like stack. Passwords here are compose defaults, not image contents.
+# Production sets QUERYMESH_ENV=production and injects secrets (see deploy/cloudrun.yaml).
+# Redis is the job broker the worker already uses.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: querymesh
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-querymesh_local}
+      POSTGRES_DB: querymesh
+      ANALYTICS_PASSWORD: ${ANALYTICS_PASSWORD:-querymesh_ro_local}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./deploy/postgres/init-readonly.sh:/docker-entrypoint-initdb.d/01-readonly.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U querymesh -d querymesh"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build: .
+    environment: &app-env
+      QUERYMESH_ENV: local
+      ANALYTICS_HOST: postgres
+      ANALYTICS_PORT: "5432"
+      ANALYTICS_USER: querymesh_ro
+      ANALYTICS_PASSWORD: ${ANALYTICS_PASSWORD:-querymesh_ro_local}
+      ANALYTICS_DATABASE: querymesh
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET: ${JWT_SECRET:-local-dev-jwt-secret-not-for-production}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    ports:
+      - "8000:8000"
+    volumes:
+      - querymesh-data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker:
+    build: .
+    command: python -m workers.etl_worker
+    healthcheck:
+      disable: true
+    environment: *app-env
+    volumes:
+      - querymesh-data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  backup:
+    profiles: ["drill"]
+    build: .
+    command: python -m utils.pg_backup
+    environment:
+      BACKUP_HOST: postgres
+      BACKUP_PORT: "5432"
+      BACKUP_USER: querymesh
+      BACKUP_PASSWORD: ${POSTGRES_PASSWORD:-querymesh_local}
+      BACKUP_DATABASE: querymesh
+    volumes:
+      - backups:/app/backups
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  querymesh-data:
+  backups:

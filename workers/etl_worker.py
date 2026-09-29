@@ -8,10 +8,9 @@ import sys
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from dotenv import load_dotenv
-
 from utils.jobs import process_next
 from utils.runtime import get_backends
+from utils.secrets import prepare_runtime
 
 
 def run_etl(job: dict) -> str:
@@ -28,14 +27,19 @@ def run_etl(job: dict) -> str:
 
 
 def main() -> int:
-    load_dotenv()
+    prepare_runtime()
     if not os.environ.get("REDIS_URL", "").strip():
         print("REDIS_URL is required for the ETL worker", file=sys.stderr)
         return 1
+    import redis
+
     os.environ["QUERYMESH_WORKER"] = "1"
     jobs, _ = get_backends()
     while True:
-        process_next(jobs, run_etl, timeout=5)
+        try:
+            process_next(jobs, run_etl, timeout=5)
+        except (redis.TimeoutError, redis.ConnectionError):
+            continue
 
 
 if __name__ == "__main__":

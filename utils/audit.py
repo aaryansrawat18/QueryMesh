@@ -18,6 +18,21 @@ def audit_path() -> Path:
     return _ROOT / "data" / "audit.jsonl"
 
 
+def find_request(request_id: str, tenant_id: str) -> dict | None:
+    """Last audit row for this request inside the caller's tenant."""
+    path = audit_path()
+    if not path.is_file():
+        return None
+    found = None
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        row = json.loads(line)
+        if row.get("request_id") == request_id and row.get("tenant_id") == tenant_id:
+            found = row
+    return found
+
+
 def record(
     *,
     request_id: str,

@@ -30,7 +30,9 @@ def judge(case: dict) -> dict:
     return {"route_ok": route_ok, "sql_ok": sql_ok, "grounded": grounded}
 
 
-def summarize(cases: list[dict]) -> str:
+def summarize(cases: list[dict], feedback: list[dict] | None = None) -> str:
+    from utils.feedback import uncovered_questions
+
     rows = [judge(case) for case in cases]
     count = len(rows) or 1
     route = sum(row["route_ok"] for row in rows) / count
@@ -40,9 +42,13 @@ def summarize(cases: list[dict]) -> str:
     latency = sorted(float(case.get("latency_ms") or 0) for case in cases)
     p50 = latency[len(latency) // 2] if latency else 0
     cost = sum(float(case.get("cost_usd") or 0) for case in cases)
+    votes = feedback or []
+    downs = sum(1 for row in votes if row.get("rating") == "down")
+    uncovered = uncovered_questions(cases, votes)
     return (
         f"cases={len(rows)} route={route:.3f} sql={sql:.3f} grounded={grounded:.3f} "
-        f"latency_ms_p50={p50:.0f} cost_usd={cost:.4f} score={score:.3f}"
+        f"latency_ms_p50={p50:.0f} cost_usd={cost:.4f} "
+        f"feedback_down={downs} uncovered={uncovered} score={score:.3f}"
     )
 
 
@@ -56,8 +62,14 @@ def load() -> list[dict]:
 
 
 def main() -> str:
-    text = summarize(load())
+    from utils.feedback import load_rows, prompt_notes
+
+    feedback = load_rows()
+    text = summarize(load(), feedback)
     print(text)
+    notes = prompt_notes(feedback)
+    if notes:
+        print(notes)
     return text
 
 

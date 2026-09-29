@@ -41,3 +41,15 @@ class JobView(BaseModel):
     status: Literal["queued", "running", "succeeded", "failed"]
     result: str = ""
     error: str = ""
+
+
+class FeedbackRequest(BaseModel):
+    request_id: str = Field(..., min_length=1, max_length=128)
+    rating: Literal["up", "down"]
+    comment: str = Field(default="", max_length=2000)
+
+
+class FeedbackResponse(BaseModel):
+    request_id: str
+    rating: Literal["up", "down"]
+    stored: Literal[True] = True
